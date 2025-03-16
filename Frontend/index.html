@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Strategy Backtest</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); }
+        h2 { text-align: center; }
+        input, button { margin: 10px 0; padding: 10px; width: 100%; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background: #007bff; color: white; }
+        canvas { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Trading Strategy Backtest</h2>
+        <input type="file" id="fileInput" accept=".csv">
+        <button onclick="uploadCSV()">Upload CSV</button>
+        <button onclick="runBacktest()">Run Backtest</button>
+        <h3>Total Return: <span id="totalReturn">-</span></h3>
+        <table id="resultsTable">
+            <thead>
+                <tr><th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Signal</th><th>Daily Return</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <canvas id="chart"></canvas>
+    </div>
+
+    <script>
+        let uploadedFile;
+        function uploadCSV() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) { alert("Please select a CSV file."); return; }
+            const formData = new FormData();
+            formData.append("file", file);
+            fetch("http://127.0.0.1:8000/upload-csv/", { method: "POST", body: formData })
+            .then(response => response.json())
+            .then(data => { uploadedFile = file; alert("File uploaded successfully!"); })
+            .catch(error => console.error("Error:", error));
+        }
+
+        function runBacktest() {
+            if (!uploadedFile) { alert("Please upload a file first."); return; }
+            const formData = new FormData();
+            formData.append("file", uploadedFile);
+            fetch("http://127.0.0.1:8000/backtest/", { method: "POST", body: formData })
+            .then(response => response.json())
+            .then(data => displayResults(data))
+            .catch(error => console.error("Error:", error));
+        }
+
+        function displayResults(data) {
+            document.getElementById("totalReturn").innerText = (data.total_return * 100).toFixed(2) + "%";
+            const tbody = document.querySelector("#resultsTable tbody");
+            tbody.innerHTML = "";
+            const labels = [], closePrices = [], signals = [];
+            data.data.forEach(row => {
+                let tr = `<tr>
+                    <td>${row.Date}</td>
+                    <td>${row.Open}</td>
+                    <td>${row.High}</td>
+                    <td>${row.Low}</td>
+                    <td>${row.Close}</td>
+                    <td>${row.Signal === 1 ? 'BUY' : 'HOLD'}</td>
+                    <td>${(row["Daily Return"] * 100).toFixed(2)}%</td>
+                </tr>`;
+                tbody.innerHTML += tr;
+                labels.push(row.Date);
+                closePrices.push(row.Close);
+                signals.push(row.Signal);
+            });
+            plotChart(labels, closePrices, signals);
+        }
+
+        function plotChart(labels, closePrices, signals) {
+            const ctx = document.getElementById("chart").getContext("2d");
+            if (window.stockChart) window.stockChart.destroy();
+            window.stockChart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: "Stock Price",
+                        data: closePrices,
+                        borderColor: "#007bff",
+                        borderWidth: 2,
+                        fill: false,
+                        pointBackgroundColor: signals.map(s => s === 1 ? "green" : "gray"),
+                        pointRadius: signals.map(s => s === 1 ? 5 : 3)
+                    }]
+                }
+            });
+        }
+    </script>
+</body>
+</html>
